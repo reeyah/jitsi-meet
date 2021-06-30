@@ -4,13 +4,8 @@
 import throttle from 'lodash/throttle';
 import { PureComponent } from 'react';
 
-import { sendAnalytics, createSharedVideoEvent as createEvent } from '../../../analytics';
 import { getCurrentConference } from '../../../base/conference';
-import { MEDIA_TYPE } from '../../../base/media';
 import { getLocalParticipant } from '../../../base/participants';
-import { isLocalTrackMuted } from '../../../base/tracks';
-import { dockToolbox } from '../../../toolbox/actions.web';
-import { muteLocal } from '../../../video-menu/actions.any';
 import { setSharedVideoStatus } from '../../actions.any';
 
 export const PLAYBACK_STATES = {
@@ -32,7 +27,7 @@ function shouldSeekToPosition(newTime, previousTime) {
 }
 
 /**
- * The type of the React {@link PureComponent} props of {@link AbstractVideoManager}.
+ * The type of the React {@link Component} props of {@link AbstractVideoManager}.
  */
 export type Props = {
 
@@ -42,31 +37,11 @@ export type Props = {
     _conference: Object,
 
     /**
-     * Docks the toolbox
-     */
-    _dockToolbox: Function,
-
-    /**
-     * Indicates whether the local audio is muted
-    */
-    _isLocalAudioMuted: boolean,
-
-    /**
      * Is the video shared by the local user.
      *
      * @private
      */
     _isOwner: boolean,
-
-    /**
-     * Store flag for muted state
-     */
-    _muted: boolean,
-
-    /**
-     * Mutes local audio track
-     */
-    _muteLocal: Function,
 
     /**
      * The shared video owner id
@@ -94,10 +69,21 @@ export type Props = {
      */
      _videoUrl: string,
 
-     /**
+
+    /**
+      * The player's height
+    */
+    height: number,
+
+    /**
       * The video id
-      */
-     videoId: string
+    */
+    videoId: string,
+
+    /**
+      * The player's width
+    */
+    width: number
 }
 
 /**
@@ -115,9 +101,6 @@ class AbstractVideoManager extends PureComponent<Props> {
         super();
 
         this.throttledFireUpdateSharedVideoEvent = throttle(this.fireUpdateSharedVideoEvent.bind(this), 5000);
-
-        // selenium tests handler
-        window._sharedVideoPlayer = this;
     }
 
     /**
@@ -126,7 +109,6 @@ class AbstractVideoManager extends PureComponent<Props> {
      * @inheritdoc
      */
     componentDidMount() {
-        this.props._dockToolbox(true);
         this.processUpdatedProps();
     }
 
@@ -135,13 +117,7 @@ class AbstractVideoManager extends PureComponent<Props> {
      *
      * @inheritdoc
      */
-    componentDidUpdate(prevProps: Props) {
-        const { _videoUrl } = this.props;
-
-        if (prevProps._videoUrl !== _videoUrl) {
-            sendAnalytics(createEvent('started'));
-        }
-
+    componentDidUpdate() {
         this.processUpdatedProps();
     }
 
@@ -151,13 +127,9 @@ class AbstractVideoManager extends PureComponent<Props> {
      * @inheritdoc
      */
     componentWillUnmount() {
-        sendAnalytics(createEvent('stopped'));
-
         if (this.dispose) {
             this.dispose();
         }
-
-        this.props._dockToolbox(false);
     }
 
     /**
@@ -165,14 +137,14 @@ class AbstractVideoManager extends PureComponent<Props> {
      *
      * @returns {void}
      */
-    processUpdatedProps() {
-        const { _status, _time, _isOwner, _muted } = this.props;
+    async processUpdatedProps() {
+        const { _status, _time, _isOwner } = this.props;
 
         if (_isOwner) {
             return;
         }
 
-        const playerTime = this.getTime();
+        const playerTime = await this.getTime();
 
         if (shouldSeekToPosition(_time, playerTime)) {
             this.seek(_time);
@@ -187,14 +159,6 @@ class AbstractVideoManager extends PureComponent<Props> {
                 this.pause();
             }
         }
-
-        if (this.isMuted() !== _muted) {
-            if (_muted) {
-                this.mute();
-            } else {
-                this.unMute();
-            }
-        }
     }
 
     /**
@@ -203,8 +167,6 @@ class AbstractVideoManager extends PureComponent<Props> {
      * @returns {void}
      */
     onPlay() {
-        this.smartAudioMute();
-        sendAnalytics(createEvent('play'));
         this.fireUpdateSharedVideoEvent();
     }
 
@@ -214,42 +176,7 @@ class AbstractVideoManager extends PureComponent<Props> {
      * @returns {void}
      */
     onPause() {
-        sendAnalytics(createEvent('paused'));
         this.fireUpdateSharedVideoEvent();
-    }
-
-    /**
-     * Handle volume changed.
-     *
-     * @returns {void}
-     */
-    onVolumeChange() {
-        const volume = this.getVolume();
-        const muted = this.isMuted();
-
-        if (volume > 0 && !muted) {
-            this.smartAudioMute();
-        }
-
-        sendAnalytics(createEvent(
-            'volume.changed',
-            {
-                volume,
-                muted
-            }));
-
-        this.fireUpdatePlayingVideoEvent();
-    }
-
-    /**
-     * Handle changes to the shared playing video.
-     *
-     * @returns {void}
-     */
-    fireUpdatePlayingVideoEvent() {
-        if (this.getPlaybackState() === PLAYBACK_STATES.PLAYING) {
-            this.fireUpdateSharedVideoEvent();
-        }
     }
 
     /**
@@ -257,7 +184,7 @@ class AbstractVideoManager extends PureComponent<Props> {
      *
      * @returns {void}
      */
-    fireUpdateSharedVideoEvent() {
+    async fireUpdateSharedVideoEvent() {
         const { _isOwner } = this.props;
 
         if (!_isOwner) {
@@ -270,6 +197,8 @@ class AbstractVideoManager extends PureComponent<Props> {
             return;
         }
 
+        const time = await this.getTime();
+
         const {
             _ownerId,
             _setSharedVideoStatus,
@@ -279,40 +208,9 @@ class AbstractVideoManager extends PureComponent<Props> {
         _setSharedVideoStatus({
             videoUrl: _videoUrl,
             status,
-            time: this.getTime(),
-            ownerId: _ownerId,
-            muted: this.isMuted()
+            time,
+            ownerId: _ownerId
         });
-    }
-
-    /**
-     * Indicates if the player volume is currently on. This will return true if
-     * we have an available player, which is currently in a PLAYING state,
-     * which isn't muted and has it's volume greater than 0.
-     *
-     * @returns {boolean} Indicating if the volume of the shared video is
-     * currently on.
-     */
-    isSharedVideoVolumeOn() {
-        return this.getPlaybackState() === PLAYBACK_STATES.PLAYING
-                && !this.isMuted()
-                && this.getVolume() > 0;
-    }
-
-    /**
-     * Smart mike mute. If the mike isn't currently muted and the shared video
-     * volume is on we mute the mike.
-     *
-     * @returns {void}
-     */
-    smartAudioMute() {
-        const { _isLocalAudioMuted, _muteLocal } = this.props;
-
-        if (!_isLocalAudioMuted
-            && this.isSharedVideoVolumeOn()) {
-            sendAnalytics(createEvent('audio.muted'));
-            _muteLocal(true);
-        }
     }
 
     /**
@@ -327,16 +225,6 @@ class AbstractVideoManager extends PureComponent<Props> {
     getPlaybackState: () => boolean;
 
     /**
-     * Indicates whether the video is muted
-     */
-    isMuted: () => boolean;
-
-    /**
-     * Retrieves current volume
-     */
-    getVolume: () => number;
-
-    /**
      * Plays video
      */
     play: () => void;
@@ -345,16 +233,6 @@ class AbstractVideoManager extends PureComponent<Props> {
      * Pauses video
      */
     pause: () => void;
-
-    /**
-     * Mutes video
-     */
-    mute: () => void;
-
-    /**
-     * Unmutes video
-     */
-    unMute: () => void;
 
     /**
      * Retrieves current time
@@ -377,15 +255,12 @@ export default AbstractVideoManager;
  * @returns {Props}
  */
 export function _mapStateToProps(state: Object): $Shape<Props> {
-    const { ownerId, status, time, videoUrl, muted } = state['features/shared-video'];
+    const { ownerId, status, time, videoUrl } = state['features/shared-video'];
     const localParticipant = getLocalParticipant(state);
-    const _isLocalAudioMuted = isLocalTrackMuted(state['features/base/tracks'], MEDIA_TYPE.AUDIO);
 
     return {
         _conference: getCurrentConference(state),
-        _isLocalAudioMuted,
         _isOwner: ownerId === localParticipant.id,
-        _muted: muted,
         _ownerId: ownerId,
         _status: status,
         _time: time,
@@ -401,19 +276,12 @@ export function _mapStateToProps(state: Object): $Shape<Props> {
  */
 export function _mapDispatchToProps(dispatch: Function): $Shape<Props> {
     return {
-        _dockToolbox: value => {
-            dispatch(dockToolbox(value));
-        },
-        _muteLocal: value => {
-            dispatch(muteLocal(value, MEDIA_TYPE.AUDIO));
-        },
-        _setSharedVideoStatus: ({ videoUrl, status, time, ownerId, muted }) => {
+        _setSharedVideoStatus: ({ videoUrl, status, time, ownerId }) => {
             dispatch(setSharedVideoStatus({
                 videoUrl,
                 status,
                 time,
-                ownerId,
-                muted
+                ownerId
             }));
         }
     };
