@@ -53,7 +53,7 @@ import {
 import SecurityDialogButton from '../../../security/components/security-dialog/SecurityDialogButton';
 import { SettingsButton } from '../../../settings';
 import { SharedVideoButton } from '../../../shared-video/components';
-//import { SharedPresentationButton } from '../../../share-presentation/components';
+import { UploadPresentationButton } from '../../../upload-presentation/components';
 import { SpeakerStatsButton } from '../../../speaker-stats';
 import {
     ClosedCaptionButton
@@ -680,6 +680,12 @@ class Toolbox extends Component<Props> {
             group: 3
         };
 
+        const uploadPresentation = {
+            key: 'uploadresentation',
+            Content: UploadPresentationButton,
+            group: 3
+        };
+
         /*const sharePresentation = {
             key: 'sharedpresentation',
             Content: SharedPresentationButton,
@@ -766,7 +772,7 @@ class Toolbox extends Component<Props> {
             muteVideoEveryone,
             livestreaming,
             shareVideo,
-            //sharePresentation,
+            uploadPresentation,
             shareAudio,
             etherpad,
             virtualBackground,

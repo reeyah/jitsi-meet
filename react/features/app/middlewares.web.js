@@ -14,7 +14,7 @@ import '../power-monitor/middleware';
 import '../prejoin/middleware';
 import '../remote-control/middleware';
 import '../screen-share/middleware';
-import '../shared-video/middleware';
+//import '../shared-video/middleware';
 import '../talk-while-muted/middleware';
 import '../virtual-background/middleware';
 
