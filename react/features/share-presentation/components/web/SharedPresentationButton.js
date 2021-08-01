@@ -3,14 +3,14 @@
 import type { Dispatch } from 'redux';
 
 import { translate } from '../../../base/i18n';
-import { IconUpload} from '../../../base/icons';
+import { IconSharePresentation } from '../../../base/icons';
 import { connect } from '../../../base/redux';
 import {
     AbstractButton,
     type AbstractButtonProps
 } from '../../../base/toolbox/components';
-import { toggleUploadPresentation } from '../../actions.any';
-import { isUploadedStatus } from '../../functions';
+import { toggleSharedVideo } from '../../actions.any';
+import { isSharingStatus } from '../../functions';
 
 type Props = AbstractButtonProps & {
 
@@ -27,37 +27,18 @@ type Props = AbstractButtonProps & {
     /**
      * Whether or not the local participant is sharing a video.
      */
-     _presentationUploaded: boolean
+    _sharingVideo: boolean
 };
 
 /**
  * Implements an {@link AbstractButton} to open the user documentation in a new window.
  */
-class UploadPresentationButton extends AbstractButton<Props, *> {
-    accessibilityLabel = 'toolbar.accessibilityLabel.uploadpresentation';
-    icon = IconUpload;
-    label = 'toolbar.uploadpresentation';
-    toggledLabel = 'toolbar.presentationUploaded';
-
-    /**
-     * Dynamically retrieves tooltip based on sharing state.
-     */
-    get tooltip() {
-        if (this._isToggled()) {
-            return 'toolbar.presentationUploaded';
-        }
-
-        return 'toolbar.uploadpresentation';
-    }
-
-    /**
-     * Required by linter due to AbstractButton overwritten prop being writable.
-     *
-     * @param {string} value - The value.
-     */
-    set tooltip(value) {
-        return value;
-    }
+class SharedPresentationButton extends AbstractButton<Props, *> {
+    accessibilityLabel = 'toolbar.accessibilityLabel.sharedpresentation';
+    icon = IconSharePresentation;
+    label = 'toolbar.sharedpresentation';
+    tooltip = 'toolbar.sharedpresentation';
+    toggledLabel = 'toolbar.stopSharedPresentation';
 
     /**
      * Handles clicking / pressing the button, and opens a new dialog.
@@ -66,7 +47,7 @@ class UploadPresentationButton extends AbstractButton<Props, *> {
      * @returns {void}
      */
     _handleClick() {
-         this._doToggleUploadPresentation();
+        this._doToggleSharedVideo();
     }
 
     /**
@@ -77,7 +58,7 @@ class UploadPresentationButton extends AbstractButton<Props, *> {
      * @returns {boolean}
      */
     _isToggled() {
-        return this.props._presentationUploaded;
+        return this.props._sharingVideo;
     }
 
     /**
@@ -97,8 +78,8 @@ class UploadPresentationButton extends AbstractButton<Props, *> {
      * @private
      * @returns {void}
      */
-    _doToggleUploadPresentation() {
-        this.props.dispatch(toggleUploadPresentation());
+    _doToggleSharedVideo() {
+        this.props.dispatch(toggleSharedVideo());
     }
 }
 
@@ -111,15 +92,15 @@ class UploadPresentationButton extends AbstractButton<Props, *> {
  */
 function _mapStateToProps(state): Object {
     const {
-        disabled: BtnDisabled,
-        status: uploadStatus
+        disabled: sharedVideoBtnDisabled,
+        status: sharedVideoStatus
     } = state['features/shared-video'];
 
     return {
-        _isDisabled: BtnDisabled,
-        _presentationUploaded: isUploadedStatus(uploadStatus)
+        _isDisabled: sharedVideoBtnDisabled,
+        _sharingVideo: isSharingStatus(sharedVideoStatus)
     };
 }
 
 
-export default translate(connect(_mapStateToProps)(UploadPresentationButton));
+export default translate(connect(_mapStateToProps)(SharedPresentationButton));

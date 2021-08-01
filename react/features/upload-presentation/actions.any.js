@@ -6,7 +6,7 @@ export function showUploadPresentationDialog() {
     return openDialog(UploadPresentationDialog);
 }
 
-export function toggleSharedVideo() {
+export function toggleUploadPresentation() {
     return (dispatch, getState) => {
         const state = getState();
         const { status } = state['features/upload-presentation'];
